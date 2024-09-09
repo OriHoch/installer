@@ -31,8 +31,14 @@ systemctl enable rke2-server.service
 systemctl start rke2-server.service
 ln -s /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+start_time=$(date +%s)
+while [ "$(kubectl get nodes --ignore-not-found -o json | jq '.items | length')" != "1" ]; do
+  sleep 1
+  [ $(($(date +%s) - $start_time)) -gt 300 ]
+  waitOrStop 0 "Failed waiting for node to exist"
+done
 kubectl wait --for=condition=Ready nodes --all --timeout=600s
-waitOrStop 0 "Failed waiting for nodes to be ready"
+waitOrStop 0 "Failed waiting for node to be ready"
 kubectl wait --for=condition=available deployments --all --namespace kube-system --timeout=600s
 waitOrStop 0 "Failed waiting for deployments to be ready"
 kubectl wait --for=condition=complete jobs --all --namespace kube-system --timeout=600s
