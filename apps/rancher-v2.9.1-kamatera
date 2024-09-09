@@ -16,9 +16,6 @@ echo "Installing Jq" | log
 installPackage jq
 waitOrStop 0 "Failed apt install: jq"
 
-# ${ADMINEMAIL}
-# ${CWM_DOMAIN}
-
 echo "Deploying RKE2 Server" | log
 mkdir -p /etc/rancher/rke2/
 cat << EOF > /etc/rancher/rke2/config.yaml
@@ -32,10 +29,14 @@ systemctl start rke2-server.service
 ln -s /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
 start_time=$(date +%s)
-while [ "$(kubectl get nodes --ignore-not-found -o json | jq '.items | length')" != "1" ]; do
+while (
+    [ "$(kubectl get nodes --ignore-not-found -o json | jq '.items | length')" != "1" ] ||\
+    ! kubectl get jobs -n kube-system helm-install-rke2-ingress-nginx ||\
+    ! kubectl get deployment -n kube-system rke2-coredns-rke2-coredns
+); do
   sleep 1
-  [ $(($(date +%s) - $start_time)) -gt 300 ]
-  waitOrStop 0 "Failed waiting for node to exist"
+  [ $(($(date +%s) - $start_time)) -lt 900 ]
+  waitOrStop 0 "Failed waiting for node/job/deployment to exist"
 done
 kubectl wait --for=condition=Ready nodes --all --timeout=600s
 waitOrStop 0 "Failed waiting for node to be ready"
@@ -64,6 +65,12 @@ spec:
   set:
     "crds.enabled": "true"
 EOF
+start_time=$(date +%s)
+while ! kubectl get jobs -n kube-system helm-install-cert-manager; do
+  sleep 1
+  [ $(($(date +%s) - $start_time)) -lt 900 ]
+  waitOrStop 0 "Failed waiting for cert-manager job to exist"
+done
 kubectl wait --for=condition=complete jobs helm-install-cert-manager --namespace kube-system --timeout=600s
 waitOrStop 0 "Failed waiting for cert-manager installation job to be ready"
 cat << EOF > /var/lib/rancher/rke2/server/manifests/cert-manager-letsencrypt.yaml
@@ -106,6 +113,14 @@ spec:
     "letsEncrypt.email": "$ADMINEMAIL"
     "letsEncrypt.ingress.class": "nginx"
 EOF
+start_time=$(date +%s)
+while ! kubectl get jobs -n kube-system helm-install-rancher; do
+  sleep 1
+  [ $(($(date +%s) - $start_time)) -lt 900 ]
+  waitOrStop 0 "Failed waiting for rancher job to exist"
+done
+kubectl wait --for=condition=complete jobs helm-install-rancher --namespace kube-system --timeout=600s
+waitOrStop 0 "Failed waiting for rancher installation job to be ready"
 
 echo "Adding descriptions" | log
 descriptionAppend "Rancher Web UI: https://${CWM_DOMAIN}"
