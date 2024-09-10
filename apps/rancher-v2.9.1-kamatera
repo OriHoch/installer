@@ -90,6 +90,9 @@ spec:
 EOF
 
 echo "Deploying Rancher" | log
+if [ -z "$ADMINPASSWORD" ]; then
+  ADMINPASSWORD=$(openssl rand -hex 16)
+fi
 cat << EOF > /var/lib/rancher/rke2/server/manifests/rancher.yaml
 apiVersion: v1
 kind: Namespace
