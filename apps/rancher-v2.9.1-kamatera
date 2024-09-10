@@ -30,19 +30,19 @@ ln -s /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
 start_time=$(date +%s)
 while (
-    [ "$(kubectl get nodes --ignore-not-found -o json | jq '.items | length')" != "1" ] ||\
-    ! kubectl get jobs -n kube-system helm-install-rke2-ingress-nginx ||\
+    [ "$(kubectl get nodes --ignore-not-found -o json | jq '.items | length')" != "1" ] ||
+    ! kubectl get jobs -n kube-system helm-install-rke2-ingress-nginx ||
     ! kubectl get deployment -n kube-system rke2-coredns-rke2-coredns
 ); do
   sleep 1
-  [ $(($(date +%s) - $start_time)) -lt 900 ]
+  [ $(($(date +%s) - $start_time)) -lt 3600 ]
   waitOrStop 0 "Failed waiting for node/job/deployment to exist"
 done
-kubectl wait --for=condition=Ready nodes --all --timeout=600s
+kubectl wait --for=condition=Ready nodes --all --timeout=3600s
 waitOrStop 0 "Failed waiting for node to be ready"
-kubectl wait --for=condition=available deployments --all --namespace kube-system --timeout=600s
+kubectl wait --for=condition=available deployments --all --namespace kube-system --timeout=3600s
 waitOrStop 0 "Failed waiting for deployments to be ready"
-kubectl wait --for=condition=complete jobs --all --namespace kube-system --timeout=600s
+kubectl wait --for=condition=complete jobs --all --namespace kube-system --timeout=3600s
 waitOrStop 0 "Failed waiting for jobs to be ready"
 
 echo "Deploying cert-manager" | log
@@ -68,10 +68,10 @@ EOF
 start_time=$(date +%s)
 while ! kubectl get jobs -n kube-system helm-install-cert-manager; do
   sleep 1
-  [ $(($(date +%s) - $start_time)) -lt 900 ]
+  [ $(($(date +%s) - $start_time)) -lt 3600 ]
   waitOrStop 0 "Failed waiting for cert-manager job to exist"
 done
-kubectl wait --for=condition=complete jobs helm-install-cert-manager --namespace kube-system --timeout=600s
+kubectl wait --for=condition=complete jobs helm-install-cert-manager --namespace kube-system --timeout=3600s
 waitOrStop 0 "Failed waiting for cert-manager installation job to be ready"
 cat << EOF > /var/lib/rancher/rke2/server/manifests/cert-manager-letsencrypt.yaml
 apiVersion: cert-manager.io/v1
@@ -116,10 +116,10 @@ EOF
 start_time=$(date +%s)
 while ! kubectl get jobs -n kube-system helm-install-rancher; do
   sleep 1
-  [ $(($(date +%s) - $start_time)) -lt 900 ]
+  [ $(($(date +%s) - $start_time)) -lt 3600 ]
   waitOrStop 0 "Failed waiting for rancher job to exist"
 done
-kubectl wait --for=condition=complete jobs helm-install-rancher --namespace kube-system --timeout=600s
+kubectl wait --for=condition=complete jobs helm-install-rancher --namespace kube-system --timeout=3600s
 waitOrStop 0 "Failed waiting for rancher installation job to be ready"
 
 echo "Adding descriptions" | log
